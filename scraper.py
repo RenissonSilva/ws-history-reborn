@@ -10,9 +10,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from dotenv import dotenv_values
 
-# Falta guardar em um csv os envios de email, pra evitar que faça um envio duplicado
-# Fazer loop de pesqquisa de vários itens
-
 
 # *** SCHEDULE ***
 # def job():
@@ -31,39 +28,118 @@ headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36'
 }
 
-page = requests.get('https://historyreborn.net/?module=item&action=view&id='+config['ITEM_ID'], headers=headers)
-                    
-soup = BeautifulSoup(page.text, 'html.parser')
+#   idItem: preçoItem
 
-tableStore = soup.find(id="nova-sale-table")
+itens = {
+    9288: 449999, # Ovo de Dragão da Serenidade
+    600024: 90000 # Dragonic Slayer-LT [2]
+}
 
-sendMessage = 'false'
+bodyHtml = ""
 
-for rows in tableStore.find_all('tr'):
-    if("CASH" in rows.find_all('td')[5].text):
-        if(int(rows.find('font').text.replace(',', '')) <= int(config['ITEM_PRECO'])):
-            sendMessage = 'true'
-            print(rows.find('font').text)
-            print('-----------')
+for itemId in itens:
+    itemPrice = itens[itemId]
 
-# if(sendMessage == 'true'):
-#     subject = "History Reborn - Tá baratim"
-#     body = "O produto X chegou no preço"
-#     sender_email = config['SENDER_EMAIL']
-#     recipient_email = config['RECIPIENT_EMAIL']
-#     sender_password = config['GMAIL_TOKEN']
-#     smtp_server = 'smtp.gmail.com'
-#     smtp_port = 465
+    page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers)
+                        
+    soup = BeautifulSoup(page.text, 'html.parser')
 
-#     message = MIMEMultipart()
-#     message['Subject'] = subject
-#     message['From'] = sender_email
-#     message['To'] = recipient_email
-#     body_part = MIMEText(body)
-#     message.attach(body_part)
+    tableStore = soup.find(id="nova-sale-table")
 
-#     with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
-#         server.login(sender_email, sender_password)
-#         server.sendmail(sender_email, recipient_email, message.as_string())
+    sendMessage = 'false'
+
+    itemName = soup.findAll('h2')[1].text
+
+    #   Início da criação da tabela de um item
+    bodyHtml += """
+        <h2>""" + itemName + """</h2>
+
+        <table>
+        <tr>
+            <th>Loja</th>
+            <th>Refinamento</th>
+            <th>Cartas</th>
+            <th>Valor</th>
+            <th>Qtd</th>
+        </tr>"""
+
+    for rows in tableStore.find_all('tr'):
+        rowItem = ""
+        if("CASH" in rows.find_all('td')[5].text):
+
+            if(int(rows.find('font').text.replace(',', '')) <= int(itemPrice)):
+                sendMessage = 'true'
+
+                storeName = rows.find_all('td')[0].text
+                refinement = rows.find_all('td')[1].text
+                cards = rows.find_all('td')[2].text
+                price = rows.find_all('td')[3].text
+                quantity = rows.find_all('td')[4].text
+
+                #   Adicionando valores em cada uma das células da tabela
+                if(storeName):
+                    rowItem += """   <tr>
+                                        <td>""" + storeName + """</td>
+                                        <td>""" + refinement + """</td>
+                                        <td>""" + cards + """</td>
+                                        <td>""" + price + """</td>
+                                        <td>""" + quantity + """</td>
+                                    </tr>"""
+                    bodyHtml += rowItem
+
+    bodyHtml += """</table>"""
+
+
+        
+#   Contrói HTML que vai ser enviado pelo email
+html = """
+    <html>
+        <head>
+            <style>
+                table {
+                    font-family: arial, sans-serif;
+                    border-collapse: collapse;
+                    width: 100%;
+                }
+
+                td, th {
+                    border: 1px solid #dddddd;
+                    text-align: left;
+                    padding: 8px;
+                    width: 200px;
+                }
+
+                tr:nth-child(even) {
+                    background-color: #dddddd;
+                }
+            </style>
+        </head>
+        <body>
+            """ + bodyHtml + """
+        </body>
+    </html>
+"""
+
+# print(bodyHtml)
+if(sendMessage == 'true'):
+    subject = "History Reborn - Alerta atingido"
+    body = html
+    sender_email = config['SENDER_EMAIL']
+    recipient_email = config['RECIPIENT_EMAIL']
+    sender_password = config['GMAIL_TOKEN']
+    smtp_server = 'smtp.gmail.com'
+    smtp_port = 465
+
+    message = MIMEMultipart()
+    message['Subject'] = subject
+    message['From'] = sender_email
+    message['To'] = recipient_email
+    body_part = MIMEText(body, 'html')
+    message.attach(body_part)
+
+    with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, recipient_email, message.as_string())
+
     
 print('Finalizou :)')
