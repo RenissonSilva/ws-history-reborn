@@ -174,9 +174,9 @@ def checkPrices():
     if(sendMessage == 'true' and resetCsv == False):
         subject = "History Reborn - Alerta atingido"
         body = html
-        sender_email = config['SENDER_EMAIL']
-        recipient_email = config['RECIPIENT_EMAIL']
-        sender_password = config['GMAIL_TOKEN']
+        sender_email = os.environ.get("SENDER_EMAIL")
+        recipient_email = os.environ.get("RECIPIENT_EMAIL")
+        sender_password = os.environ.get("GMAIL_TOKEN")
         smtp_server = 'smtp.gmail.com'
         smtp_port = 465
 
