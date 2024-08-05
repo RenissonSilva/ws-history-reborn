@@ -55,8 +55,8 @@ def checkPrices():
         itemPrice = itens[itemId]
 
         # page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers, proxies=proxyDict)
-        page = webdriver.Chrome(ChromeDriverManager().install())
-        # page = webdriver.Chrome()
+        # page = webdriver.Chrome(ChromeDriverManager().install())
+        page = webdriver.Chrome()
         page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
                             
         soup = BeautifulSoup(page.page_source,"lxml")
