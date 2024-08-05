@@ -12,6 +12,8 @@ from email.mime.application import MIMEApplication
 from dotenv import dotenv_values
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
+from selenium import webdriver
+
 
 
 def checkPrices():
@@ -43,7 +45,7 @@ def checkPrices():
 
     #   idItem: preçoItem
     itens = {
-        9288: 449999, # Ovo de Dragão da Serenidade
+        # 9288: 449999, # Ovo de Dragão da Serenidade
         6608: 30
     }
 
@@ -52,12 +54,14 @@ def checkPrices():
     for itemId in itens:
         itemPrice = itens[itemId]
 
-        page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers, proxies=proxyDict)
+        # page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers, proxies=proxyDict)
+        dr = webdriver.Chrome()
+        dr.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
 
         if page.status_code != 200:
             print("Falha ao obter a página:", page.status_code)
                             
-        soup = BeautifulSoup(page.text, 'html.parser')
+        soup = BeautifulSoup(dr.page_source,"lxml")
         print('soup:', soup)
         tableStore = soup.find(id="nova-sale-table")
 
