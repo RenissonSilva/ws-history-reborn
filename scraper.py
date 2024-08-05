@@ -3,6 +3,7 @@ import smtplib
 import schedule
 import time
 import csv
+import os
 
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
@@ -18,6 +19,11 @@ def checkPrices():
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36'
+    }
+
+    proxyDict = {
+        "http"  : os.environ.get('FIXIE_URL', ''),
+        "https" : os.environ.get('FIXIE_URL', '')
     }
 
     # Caminho para o arquivo CSV
@@ -46,7 +52,7 @@ def checkPrices():
     for itemId in itens:
         itemPrice = itens[itemId]
 
-        page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers)
+        page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers, proxies=proxyDict)
 
         if page.status_code != 200:
             print("Falha ao obter a página:", page.status_code)
