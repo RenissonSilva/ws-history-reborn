@@ -48,11 +48,10 @@ def checkPrices():
 
         page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers)
 
-        if page.status_code == 200:
-            soup = BeautifulSoup(page.text, 'html.parser')
-        else:
+        if page.status_code != 200:
             print("Falha ao obter a página:", page.status_code)
                             
+        soup = BeautifulSoup(page.text, 'html.parser')
         print('soup:', soup)
         tableStore = soup.find(id="nova-sale-table")
 
