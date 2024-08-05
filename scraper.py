@@ -55,7 +55,7 @@ def checkPrices():
 
         # page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers, proxies=proxyDict)
         # page = webdriver.Chrome()
-        
+
         chrome_options = webdriver.ChromeOptions()
         chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
         chrome_options.add_argument("--headless")
@@ -66,7 +66,7 @@ def checkPrices():
         page = webdriver.Chrome(service=Service(executable_path=os.environ.get("CHROMEDRIVER_PATH")), options=chrome_options)
         page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
                             
-        soup = BeautifulSoup(page.page_source,"lxml")
+        soup = BeautifulSoup(page.page_source,"html.parser")
         print('soup:', soup)
         tableStore = soup.find(id="nova-sale-table")
 
