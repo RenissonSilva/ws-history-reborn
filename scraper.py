@@ -4,6 +4,7 @@ import schedule
 import time
 import csv
 import os
+import cloudscraper
 
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
@@ -63,7 +64,9 @@ def checkPrices():
         chrome_options.add_argument("--no-sandbox")
 
 
-        page = webdriver.Chrome(service=Service(executable_path=os.environ.get("CHROMEDRIVER_PATH")), options=chrome_options)
+        # page = webdriver.Chrome(service=Service(executable_path=os.environ.get("CHROMEDRIVER_PATH")), options=chrome_options)
+
+        page = cloudscraper.create_scraper()
         page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
                             
         soup = BeautifulSoup(page.page_source,"html.parser")
