@@ -13,7 +13,6 @@ from dotenv import dotenv_values
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from selenium import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
 
 
 def checkPrices():
