@@ -1,5 +1,4 @@
 import requests
-import pywhatkit as kit
 import smtplib
 import schedule
 import time
