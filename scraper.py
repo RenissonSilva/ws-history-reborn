@@ -21,13 +21,24 @@ from datetime import datetime
 # while True:
 #     schedule.run_pending()
 #     time.sleep(1)
-todayDate = datetime.today().strftime('%Y-%m-%d')
 
 config = dotenv_values(".env")
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36'
 }
+
+# Caminho para o arquivo CSV
+arquivo_csv = 'mail_history.csv'
+
+todayDate = datetime.today().strftime('%Y-%m-%d')
+
+currentHour = datetime.today().strftime('%H:%M')
+
+if(currentHour == '00:00'):
+    with open(arquivo_csv, 'w', encoding='utf-8') as arquivo:
+        # O conteúdo do arquivo é truncado, deixando-o vazio
+        pass
 
 #   idItem: preçoItem
 itens = {
@@ -79,9 +90,6 @@ for itemId in itens:
                 if(storeName):
                     priceFormatado = int(rows.find('font').text.replace(',', ''))
 
-                    # Caminho para o arquivo CSV
-                    arquivo_csv = 'mail_history.csv'
-
                     # Linha que você deseja procurar
                     linha_especifica = [todayDate, str(itemId), str(priceFormatado)]
 
@@ -100,6 +108,7 @@ for itemId in itens:
                     if(linha_encontrada == False):
                         sendMessage = 'true'
 
+                        # Adiciona no arquivo csv e no html o item
                         with open('mail_history.csv', 'a') as f:
                             writer = csv.writer(f)
                             writer.writerow([todayDate, itemId, priceFormatado])
@@ -146,7 +155,7 @@ html = """
     </html>
 """
 
-if(sendMessage == 'true'):
+if(sendMessage == 'true' and currentHour != '00:00'):
     subject = "History Reborn - Alerta atingido"
     body = html
     sender_email = config['SENDER_EMAIL']
