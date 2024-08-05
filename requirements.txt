@@ -6,3 +6,4 @@ beautifulsoup4==4.8.2
 schedule==1.2.2
 python-dotenv==1.0.0
 selenium==4.11.2
+webdriver-manager==4.0.2
