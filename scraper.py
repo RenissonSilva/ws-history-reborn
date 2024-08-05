@@ -57,19 +57,19 @@ def checkPrices():
         # page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers, proxies=proxyDict)
         # page = webdriver.Chrome()
 
-        chrome_options = webdriver.ChromeOptions()
-        chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--no-sandbox")
+        # chrome_options = webdriver.ChromeOptions()
+        # chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN", )
+        # chrome_options.add_argument("--headless")
+        # chrome_options.add_argument("--disable-dev-shm-usage")
+        # chrome_options.add_argument("--no-sandbox")
 
 
         # page = webdriver.Chrome(service=Service(executable_path=os.environ.get("CHROMEDRIVER_PATH")), options=chrome_options)
 
         page = cloudscraper.create_scraper()
-        page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
+        scraper = page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
                             
-        soup = BeautifulSoup(page.content,"html.parser")
+        soup = BeautifulSoup(scraper.content,"html.parser")
         print('soup:', soup)
         tableStore = soup.find(id="nova-sale-table")
 
