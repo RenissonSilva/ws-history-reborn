@@ -1,7 +1,4 @@
-import requests
 import smtplib
-import schedule
-import time
 import csv
 import os
 import cloudscraper
@@ -9,16 +6,11 @@ import cloudscraper
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
-from dotenv import dotenv_values
 from datetime import datetime
-from apscheduler.schedulers.blocking import BlockingScheduler
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 
 def checkPrices():
     # Caminho para o arquivo CSV
-    arquivo_csv = 'mail_history.csv'
+    csvFile = 'mail_history.csv'
 
     todayDate = datetime.today().strftime('%Y-%m-%d')
 
@@ -28,7 +20,7 @@ def checkPrices():
     if(currentHour == '00:00'):
         resetCsv = True
         
-        with open(arquivo_csv, 'w', encoding='utf-8') as arquivo:
+        with open(csvFile, 'w', encoding='utf-8') as arquivo:
             # O conteúdo do arquivo é truncado, deixando-o vazio
             pass
 
@@ -36,27 +28,20 @@ def checkPrices():
     itens = {}
         
     # Pega id e preço de cada item do env
-    contador = 1
-    while os.environ.get('item_id_'+str(contador)) is not None:
-        item_id = os.environ.get('item_id_'+str(contador))
-        price_id = os.environ.get('price_id_'+str(contador))
+    count = 1
+    while os.environ.get('item_id_'+str(count)) is not None:
+        item_id = os.environ.get('item_id_'+str(count))
+        price_id = os.environ.get('price_id_'+str(count))
 
         itens[item_id] = price_id
 
-        contador += 1
-
-    #   idItem: preçoItem
-    # itens = {
-    #     9288: 300000, # Ovo de Dragão da Serenidade
-    #     6608: 30, # Mana coagulada
-    #     600024: 60000, # Dragonic Slayer-LT [2] 
-    #     27361: 2500, # Contaminated Wanderer Card
-    #     480084: 80000, # Manto De Fafnir [1]
-    #     490166: 9000, # Heroic Token (Dragon Knight) [1] 
-    #     470115: 20000, # Snow Flower Boots [1]  
-    # }
+        count += 1
+        
+    htmlListItens = "<h2>Lista de itens monitorados</h2>"
 
     bodyHtml = ""
+
+    sendMessage = False
 
     for itemId in itens:
         itemPrice = itens[itemId]
@@ -67,13 +52,13 @@ def checkPrices():
         soup = BeautifulSoup(scraper.content,"html.parser")
         tableStore = soup.find(id="nova-sale-table")
 
-        sendMessage = 'false'
-
         itemName = soup.findAll('h2')[1].text
+
+        htmlListItens += f"<p><b>{itemName}</b> | Preço: {itens[itemId]}</p>"
 
         #   Início da criação da tabela de um item
         bodyHtml += """
-            <h2>""" + itemName + """</h2>
+            <h3>""" + itemName + """</h3>
 
             <table>
                 <tr>
@@ -98,30 +83,30 @@ def checkPrices():
 
                     #   Adicionando valores em cada uma das células da tabela
                     if(storeName):
-                        priceFormatado = int(rows.find('font').text.replace(',', ''))
+                        formattedPrice = int(rows.find('font').text.replace(',', ''))
 
                         # Linha que você deseja procurar
-                        linha_especifica = [todayDate, str(itemId), str(priceFormatado)]
+                        specificLine = [todayDate, str(itemId), str(formattedPrice)]
 
                         # Variável para indicar se a linha foi encontrada
-                        linha_encontrada = False
+                        foundLine = False
 
                         # Procura se já foi enviado um email hoje com o alerta do item
-                        with open(arquivo_csv, newline='', encoding='utf-8') as csvfile:
+                        with open(csvFile, newline='', encoding='utf-8') as csvfile:
                             leitor = csv.reader(csvfile)
                             for linha in leitor:
                                 # Comparando a linha atual com a linha específica
-                                if linha == linha_especifica:
-                                    linha_encontrada = True
+                                if linha == specificLine:
+                                    foundLine = True
                                     break
 
-                        if(linha_encontrada == False):
-                            sendMessage = 'true'
+                        if(foundLine == False):
+                            sendMessage = True
 
                             # Adiciona no arquivo csv e no html o item
                             with open('mail_history.csv', 'a') as f:
                                 writer = csv.writer(f)
-                                writer.writerow([todayDate, itemId, priceFormatado])
+                                writer.writerow([todayDate, itemId, formattedPrice])
 
                             rowItem += """   <tr>
                                                 <td>""" + storeName + """</td>
@@ -131,7 +116,6 @@ def checkPrices():
                                                 <td>""" + quantity + """</td>
                                             </tr>"""
                         bodyHtml += rowItem
-
         bodyHtml += """</table>"""
 
 
@@ -155,35 +139,41 @@ def checkPrices():
                     }
 
                     tr:nth-child(even) {
-                        background-color: #dddddd;
+                        background-color: #b4b4b4;
+                    }
+
+                    h2, h3 {
+                        color: #8590ff;
                     }
                 </style>
             </head>
             <body>
+                """ + htmlListItens + """
+                <hr>
                 """ + bodyHtml + """
             </body>
         </html>
     """
 
-    if(sendMessage == 'true' and resetCsv == False):
+    if(sendMessage == True and resetCsv == False):
         subject = "History Reborn - Alerta atingido"
         body = html
-        sender_email = os.environ.get("SENDER_EMAIL")
-        recipient_email = os.environ.get("RECIPIENT_EMAIL")
-        sender_password = os.environ.get("GMAIL_TOKEN")
-        smtp_server = 'smtp.gmail.com'
-        smtp_port = 465
+        senderEmail = os.environ.get("SENDER_EMAIL")
+        recipientEmail = os.environ.get("RECIPIENT_EMAIL")
+        senderPassword = os.environ.get("GMAIL_TOKEN")
+        smtpServer = 'smtp.gmail.com'
+        smtpPort = 465
 
         message = MIMEMultipart()
         message['Subject'] = subject
-        message['From'] = sender_email
-        message['To'] = recipient_email
+        message['From'] = senderEmail
+        message['To'] = recipientEmail
         body_part = MIMEText(body, 'html')
         message.attach(body_part)
 
-        with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
-            server.login(sender_email, sender_password)
-            server.sendmail(sender_email, recipient_email, message.as_string())
+        with smtplib.SMTP_SSL(smtpServer, smtpPort) as server:
+            server.login(senderEmail, senderPassword)
+            server.sendmail(senderEmail, recipientEmail, message.as_string())
 
     return "Executado com sucesso!"
 
