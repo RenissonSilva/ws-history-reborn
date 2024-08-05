@@ -55,13 +55,10 @@ def checkPrices():
         itemPrice = itens[itemId]
 
         # page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers, proxies=proxyDict)
-        dr = webdriver.Chrome()
-        dr.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
-
-        if page.status_code != 200:
-            print("Falha ao obter a página:", page.status_code)
+        page = webdriver.Chrome()
+        page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
                             
-        soup = BeautifulSoup(dr.page_source,"lxml")
+        soup = BeautifulSoup(page.page_source,"lxml")
         print('soup:', soup)
         tableStore = soup.find(id="nova-sale-table")
 
@@ -190,6 +187,8 @@ if __name__ == "__main__":
     scheduler.add_job(checkPrices, 'interval', minutes=1)
     print("Scheduler iniciado. Aguardando tarefas...")
     scheduler.start()
+
+# checkPrices()
 
 # schedule.every(1).minutes.do(job)
 
