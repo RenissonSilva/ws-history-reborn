@@ -34,8 +34,11 @@ arquivo_csv = 'mail_history.csv'
 todayDate = datetime.today().strftime('%Y-%m-%d')
 
 currentHour = datetime.today().strftime('%H:%M')
+resetCsv = False
 
 if(currentHour == '00:00'):
+    resetCsv = True
+    
     with open(arquivo_csv, 'w', encoding='utf-8') as arquivo:
         # O conteúdo do arquivo é truncado, deixando-o vazio
         pass
@@ -155,7 +158,7 @@ html = """
     </html>
 """
 
-if(sendMessage == 'true' and currentHour != '00:00'):
+if(sendMessage == 'true' and resetCsv == False):
     subject = "History Reborn - Alerta atingido"
     body = html
     sender_email = config['SENDER_EMAIL']
