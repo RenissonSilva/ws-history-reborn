@@ -16,6 +16,11 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 def checkPrices():
     config = dotenv_values(".env")
 
+    proxies = {
+        'http': 'http://201.20.115.22:8080',
+        'https': 'https://72.10.164.178:1417'
+    }
+
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36'
     }
@@ -46,7 +51,7 @@ def checkPrices():
     for itemId in itens:
         itemPrice = itens[itemId]
 
-        page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers)
+        page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers, proxies=proxies)
 
         if page.status_code == 200:
             soup = BeautifulSoup(page.text, 'html.parser')
