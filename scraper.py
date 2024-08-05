@@ -55,6 +55,7 @@ def checkPrices():
 
         # page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers, proxies=proxyDict)
         # page = webdriver.Chrome()
+        
         chrome_options = webdriver.ChromeOptions()
         chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
         chrome_options.add_argument("--headless")
