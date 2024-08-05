@@ -69,7 +69,7 @@ def checkPrices():
         page = cloudscraper.create_scraper()
         page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
                             
-        soup = BeautifulSoup(page.page_source,"html.parser")
+        soup = BeautifulSoup(page.content,"html.parser")
         print('soup:', soup)
         tableStore = soup.find(id="nova-sale-table")
 
