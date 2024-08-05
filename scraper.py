@@ -53,7 +53,7 @@ def checkPrices():
         else:
             print("Falha ao obter a página:", page.status_code)
                             
-
+        print('soup:', soup)
         tableStore = soup.find(id="nova-sale-table")
 
         sendMessage = 'false'
@@ -178,7 +178,7 @@ def checkPrices():
 
 if __name__ == "__main__":
     scheduler = BlockingScheduler()
-    scheduler.add_job(checkPrices, 'interval', minutes=5)
+    scheduler.add_job(checkPrices, 'interval', minutes=1)
     print("Scheduler iniciado. Aguardando tarefas...")
     scheduler.start()
 
