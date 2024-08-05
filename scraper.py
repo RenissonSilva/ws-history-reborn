@@ -38,7 +38,7 @@ def checkPrices():
     #   idItem: preçoItem
     itens = {
         9288: 449999, # Ovo de Dragão da Serenidade
-        600024: 100000 # Dragonic Slayer-LT [2]
+        6608: 30
     }
 
     bodyHtml = ""
