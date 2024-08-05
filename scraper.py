@@ -17,17 +17,6 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 
 def checkPrices():
-    config = dotenv_values(".env")
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36'
-    }
-
-    proxyDict = {
-        "http"  : os.environ.get('FIXIE_URL', ''),
-        "https" : os.environ.get('FIXIE_URL', '')
-    }
-
     # Caminho para o arquivo CSV
     arquivo_csv = 'mail_history.csv'
 
@@ -43,34 +32,39 @@ def checkPrices():
             # O conteúdo do arquivo é truncado, deixando-o vazio
             pass
 
+    #   Itens que vão ser monitorados
+    itens = {}
+        
+    # Pega id e preço de cada item do env
+    contador = 1
+    while os.environ.get('item_id_'+str(contador)) is not None:
+        item_id = os.environ.get('item_id_'+str(contador))
+        price_id = os.environ.get('price_id_'+str(contador))
+
+        itens[item_id] = price_id
+
+        contador += 1
+
     #   idItem: preçoItem
-    itens = {
-        # 9288: 449999, # Ovo de Dragão da Serenidade
-        6608: 30
-    }
+    # itens = {
+    #     9288: 300000, # Ovo de Dragão da Serenidade
+    #     6608: 30, # Mana coagulada
+    #     600024: 60000, # Dragonic Slayer-LT [2] 
+    #     27361: 2500, # Contaminated Wanderer Card
+    #     480084: 80000, # Manto De Fafnir [1]
+    #     490166: 9000, # Heroic Token (Dragon Knight) [1] 
+    #     470115: 20000, # Snow Flower Boots [1]  
+    # }
 
     bodyHtml = ""
 
     for itemId in itens:
         itemPrice = itens[itemId]
 
-        # page = requests.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId), headers=headers, proxies=proxyDict)
-        # page = webdriver.Chrome()
-
-        # chrome_options = webdriver.ChromeOptions()
-        # chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN", )
-        # chrome_options.add_argument("--headless")
-        # chrome_options.add_argument("--disable-dev-shm-usage")
-        # chrome_options.add_argument("--no-sandbox")
-
-
-        # page = webdriver.Chrome(service=Service(executable_path=os.environ.get("CHROMEDRIVER_PATH")), options=chrome_options)
-
         page = cloudscraper.create_scraper()
         scraper = page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
                             
         soup = BeautifulSoup(scraper.content,"html.parser")
-        print('soup:', soup)
         tableStore = soup.find(id="nova-sale-table")
 
         sendMessage = 'false'
@@ -200,9 +194,3 @@ def checkPrices():
 #     scheduler.start()
 
 checkPrices()
-
-# schedule.every(1).minutes.do(job)
-
-# while True:
-#     schedule.run_pending()
-#     time.sleep(1)
