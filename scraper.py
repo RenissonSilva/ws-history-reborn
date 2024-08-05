@@ -3,13 +3,14 @@ import pywhatkit as kit
 import smtplib
 import schedule
 import time
+import csv
 
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from dotenv import dotenv_values
-
+from datetime import datetime
 
 # *** SCHEDULE ***
 # def job():
@@ -20,7 +21,7 @@ from dotenv import dotenv_values
 # while True:
 #     schedule.run_pending()
 #     time.sleep(1)
-    
+todayDate = datetime.today().strftime('%Y-%m-%d')
 
 config = dotenv_values(".env")
 
@@ -29,10 +30,9 @@ headers = {
 }
 
 #   idItem: preçoItem
-
 itens = {
     9288: 449999, # Ovo de Dragão da Serenidade
-    600024: 90000 # Dragonic Slayer-LT [2]
+    600024: 100000 # Dragonic Slayer-LT [2]
 }
 
 bodyHtml = ""
@@ -55,21 +55,20 @@ for itemId in itens:
         <h2>""" + itemName + """</h2>
 
         <table>
-        <tr>
-            <th>Loja</th>
-            <th>Refinamento</th>
-            <th>Cartas</th>
-            <th>Valor</th>
-            <th>Qtd</th>
-        </tr>"""
+            <tr>
+                <th>Loja</th>
+                <th>Refinamento</th>
+                <th>Cartas</th>
+                <th>Valor</th>
+                <th>Qtd</th>
+            </tr>
+        """
 
     for rows in tableStore.find_all('tr'):
         rowItem = ""
         if("CASH" in rows.find_all('td')[5].text):
 
             if(int(rows.find('font').text.replace(',', '')) <= int(itemPrice)):
-                sendMessage = 'true'
-
                 storeName = rows.find_all('td')[0].text
                 refinement = rows.find_all('td')[1].text
                 cards = rows.find_all('td')[2].text
@@ -78,13 +77,40 @@ for itemId in itens:
 
                 #   Adicionando valores em cada uma das células da tabela
                 if(storeName):
-                    rowItem += """   <tr>
-                                        <td>""" + storeName + """</td>
-                                        <td>""" + refinement + """</td>
-                                        <td>""" + cards + """</td>
-                                        <td>""" + price + """</td>
-                                        <td>""" + quantity + """</td>
-                                    </tr>"""
+                    priceFormatado = int(rows.find('font').text.replace(',', ''))
+
+                    # Caminho para o arquivo CSV
+                    arquivo_csv = 'mail_history.csv'
+
+                    # Linha que você deseja procurar
+                    linha_especifica = [todayDate, str(itemId), str(priceFormatado)]
+
+                    # Variável para indicar se a linha foi encontrada
+                    linha_encontrada = False
+
+                    # Procura se já foi enviado um email hoje com o alerta do item
+                    with open(arquivo_csv, newline='', encoding='utf-8') as csvfile:
+                        leitor = csv.reader(csvfile)
+                        for linha in leitor:
+                            # Comparando a linha atual com a linha específica
+                            if linha == linha_especifica:
+                                linha_encontrada = True
+                                break
+
+                    if(linha_encontrada == False):
+                        sendMessage = 'true'
+
+                        with open('mail_history.csv', 'a') as f:
+                            writer = csv.writer(f)
+                            writer.writerow([todayDate, itemId, priceFormatado])
+
+                        rowItem += """   <tr>
+                                            <td>""" + storeName + """</td>
+                                            <td>""" + refinement + """</td>
+                                            <td>""" + cards + """</td>
+                                            <td>""" + price + """</td>
+                                            <td>""" + quantity + """</td>
+                                        </tr>"""
                     bodyHtml += rowItem
 
     bodyHtml += """</table>"""
@@ -120,7 +146,6 @@ html = """
     </html>
 """
 
-# print(bodyHtml)
 if(sendMessage == 'true'):
     subject = "History Reborn - Alerta atingido"
     body = html
