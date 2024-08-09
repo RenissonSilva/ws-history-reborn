@@ -42,9 +42,11 @@ def checkPrices():
     bodyHtml = ""
 
     sendMessage = False
+    removeEmptyItems = []
 
     for itemId in itens:
         itemPrice = itens[itemId]
+        removeEmptyItems.append(itemId)
 
         page = cloudscraper.create_scraper()
         scraper = page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
@@ -58,9 +60,9 @@ def checkPrices():
 
         #   Início da criação da tabela de um item
         bodyHtml += """
-            <h3>""" + itemName + """</h3>
+            <h3 class='"""+itemId+"""'>""" + itemName + """</h3>
 
-            <table>
+            <table class='"""+itemId+"""'>
                 <tr>
                     <th>Loja</th>
                     <th>Refinamento</th>
@@ -95,9 +97,12 @@ def checkPrices():
 
                         if(cursor.rowcount > 0):
                             foundLine = True
+                        else:
+                            if itemId in removeEmptyItems: removeEmptyItems.remove(itemId)
                         
 
                         if(foundLine == False):
+                            #   Início da criação da tabela de um item
                             sendMessage = True
 
                             # Adiciona no banco o item
@@ -112,6 +117,7 @@ def checkPrices():
                                                 <td>""" + price + """</td>
                                                 <td>""" + quantity + """</td>
                                             </tr>"""
+                        
                         bodyHtml += rowItem
         bodyHtml += """</table>"""
 
@@ -151,6 +157,16 @@ def checkPrices():
             </body>
         </html>
     """
+
+    html = BeautifulSoup(html, 'html.parser')
+    # soup.find_all('table')
+    
+    for itemId in removeEmptyItems:
+        for tag in html.find_all("table", {"class": itemId}):
+            tag.decompose()
+
+        for tag in html.find_all("h3", {"class": itemId}):
+            tag.decompose()
 
     if(sendMessage == True):
         subject = "History Reborn - Alerta atingido"
