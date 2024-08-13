@@ -80,7 +80,7 @@ def checkPrices():
                     storeName = (rows.find_all('td')[0].text).strip()
                     refinement = (rows.find_all('td')[1].text).strip()
                     cards = (rows.find_all('td')[2].text).strip()
-                    price = (rows.find_all('td')[3].text).replace("c", "").strip()
+                    price = (rows.find_all('td')[3].text).replace("c", "").replace(",", "").strip()
                     quantity = (rows.find_all('td')[4].text).strip()
 
                     #   Adicionando valores em cada uma das células da tabela
