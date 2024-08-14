@@ -12,6 +12,12 @@ CREATE TABLE alerts (
     primary key (alert_id)
 )
 
+CREATE TABLE error_emails (
+    id int not null auto_increment,
+    date date NOT NULL,
+	primary key (id)
+);
+
 INSERT INTO alerts (name, item_id, refinement, store_name, price, date) VALUES ('Mana coagulada', 6608, null, 'Apenas um teste', 105.20, '2024-08-07')
 
 SELECT * FROM alerts WHERE item_id = '6608' AND store_name = 'Apenas um teste' AND date = '2024-08-07' AND price = 105.20;
