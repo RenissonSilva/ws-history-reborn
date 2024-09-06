@@ -3,6 +3,7 @@ import os
 import cloudscraper
 import mysql.connector
 import traceback
+import time
 
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
@@ -210,4 +211,14 @@ def checkPrices():
 
         return "Ocorreu um erro, verificar nos logs do Heroku!"
 
-checkPrices()
+# checkPrices()
+
+if __name__ == "__main__":
+    for i in range(4):
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"Execução {i + 1} de 5 - Horário: {current_time}")
+        checkPrices()
+        current_time_final = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"Terminou {i + 1} de 5 - Horário: {current_time_final}")
+
+        # time.sleep(60)
