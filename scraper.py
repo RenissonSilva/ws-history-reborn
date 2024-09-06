@@ -73,7 +73,9 @@ def checkPrices():
 
             #   Início da criação da tabela de um item
             bodyHtml += """
-                <h3 class='"""+itemId+"""'>""" + itemName + """</h3>
+                <h3 class='"""+itemId+"""'>
+                    <a href='https://historyreborn.net/?module=item&action=view&id="""+itemId+"""'>"""+ itemName + """</a>
+                </h3>
 
                 <table class='"""+itemId+"""'>
                     <tr>
