@@ -2,6 +2,7 @@ import smtplib
 import os
 import cloudscraper
 import mysql.connector
+import traceback
 
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
@@ -56,12 +57,12 @@ def checkPrices():
         removeEmptyItems = []
 
         for item in itens_bd:
-            itemId = item[2]
+            itemId = str(item[2])
             itemPrice = item[4]
             removeEmptyItems.append(itemId)
 
             page = cloudscraper.create_scraper()
-            scraper = page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
+            scraper = page.get('https://historyreborn.net/?module=item&action=view&id='+itemId)
                             
             soup = BeautifulSoup(scraper.content,"html.parser")
             tableStore = soup.find(id="nova-sale-table")
@@ -185,7 +186,10 @@ def checkPrices():
         cursor.close()
         conexao.close()
         return "Executado com sucesso!"
-    except:
+    except Exception as e:
+        print(f"Ocorreu um erro: {e}")
+        # traceback.print_exc()
+
         comando = f"SELECT * FROM error_emails WHERE date = '{todayDate}';"
         cursor.execute(comando)
 
