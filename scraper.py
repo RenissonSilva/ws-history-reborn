@@ -42,18 +42,11 @@ def checkPrices():
 
         todayDate = datetime.today().strftime('%Y-%m-%d')
 
-        #   Itens que vão ser monitorados
-        itens = {}
-            
-        # Pega id e preço de cada item do env
-        count = 1
-        while os.getenv('ITEM_ID_'+str(count)) is not None:
-            item_id = os.getenv('ITEM_ID_'+str(count))
-            price_id = os.getenv('PRICE_ID_'+str(count))
+        # Executar a consulta SQL
+        cursor.execute("SELECT * FROM items")
 
-            itens[item_id] = price_id
-
-            count += 1
+        # Recuperar todos os registros
+        itens_bd = cursor.fetchall()
             
         htmlListItens = "<h2>Lista de itens monitorados</h2>"
 
@@ -62,19 +55,20 @@ def checkPrices():
         sendMessage = False
         removeEmptyItems = []
 
-        for itemId in itens:
-            itemPrice = itens[itemId]
+        for item in itens_bd:
+            itemId = item[2]
+            itemPrice = item[4]
             removeEmptyItems.append(itemId)
 
             page = cloudscraper.create_scraper()
             scraper = page.get('https://historyreborn.net/?module=item&action=view&id='+str(itemId))
-                                
+                            
             soup = BeautifulSoup(scraper.content,"html.parser")
             tableStore = soup.find(id="nova-sale-table")
 
             itemName = soup.findAll('h2')[1].text
 
-            htmlListItens += f"<p><b>{itemName}</b> | Preço: {itens[itemId]}</p>"
+            htmlListItens += f"<p><b>{itemName}</b> | Preço: {itemPrice}</p>"
 
             #   Início da criação da tabela de um item
             bodyHtml += """
@@ -209,13 +203,5 @@ def checkPrices():
             conexao.commit()
 
         return "Ocorreu um erro, verificar nos logs do Heroku!"
-        
-    
-
-# if __name__ == "__main__":
-#     scheduler = BlockingScheduler()
-#     scheduler.add_job(checkPrices, 'interval', minutes=1)
-#     print("Scheduler iniciado. Aguardando tarefas...")
-#     scheduler.start()
 
 checkPrices()

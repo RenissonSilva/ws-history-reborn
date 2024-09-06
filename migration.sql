@@ -12,6 +12,15 @@ CREATE TABLE alerts (
     primary key (alert_id)
 )
 
+CREATE TABLE items (
+    id int not null auto_increment,
+    name varchar(255) not null,
+    item_id int not null,
+    refinement int,
+    price decimal(12,2) not null,
+    primary key (id)
+)
+
 CREATE TABLE error_emails (
     id int not null auto_increment,
     date date NOT NULL,
