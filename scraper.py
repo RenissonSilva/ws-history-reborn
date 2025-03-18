@@ -38,6 +38,7 @@ def checkPrices():
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
             database=os.getenv("DATABASE"),
+            port=int(os.getenv("DB_PORT", 3306))
         )
 
         cursor = conexao.cursor(buffered=True)
