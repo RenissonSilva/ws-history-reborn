@@ -212,79 +212,91 @@ def checkPrices():
 
         return "Ocorreu um erro, verificar nos logs do Heroku!"
 
-# def checkStoreSales():
-#     try:
-#         conexao = mysql.connector.connect(
-#             host=os.getenv("DB_HOST"),
-#             user=os.getenv("DB_USER"),
-#             password=os.getenv("DB_PASSWORD"),
-#             database=os.getenv("DATABASE"),
-#             port=int(os.getenv("DB_PORT", 3306))
-#         )
+def checkStoreSales():
+    try:
+        conexao = mysql.connector.connect(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DATABASE"),
+            port=int(os.getenv("DB_PORT", 3306))
+        )
 
-#         cursor = conexao.cursor(buffered=True)
+        cursor = conexao.cursor(buffered=True)
 
-#         cursor.execute("SELECT * FROM stores WHERE is_active = 1")
-#         lojas = cursor.fetchall()
+        cursor.execute("SELECT id, name, player_name, url FROM stores WHERE is_active = 1")
+        lojas = cursor.fetchall()
 
-#         if not lojas:
-#             return
+        if not lojas:
+            return
 
-#         vendasHtml = "<h2>Itens vendidos detectados</h2>"
-#         houveVenda = False
+        vendasHtml = "<h2>Itens vendidos detectados</h2>"
+        houveVenda = False
 
-#         for loja in lojas:
-#             store_id, store_name, is_active, player_name, store_url = loja
+        for loja in lojas:
+            id, name, player_name, url = loja
+            scraper = cloudscraper.create_scraper()
+            response = scraper.get(url)
+            soup = BeautifulSoup(response.content, "html.parser")
 
-#             scraper = cloudscraper.create_scraper()
-#             response = scraper.get(store_url)
-#             soup = BeautifulSoup(response.content, "html.parser")
+            itensAtuais = set()
+            tabelaItens = soup.find("table")
 
-#             itensAtuais = set()
-#             tabelaItens = soup.find("table")
+            if not tabelaItens:
+                continue
 
-#             if not tabelaItens:
-#                 continue
+            for tr in tabelaItens.find_all("tr")[1:]:
+                tds = tr.find_all("td")
+                if len(tds) >= 2:
+                    nomeItem = tds[0].text.strip()
+                    precoItem = tds[9].text.strip().replace("c", "").replace(",", "")
+                    itensAtuais.add((nomeItem, precoItem))
 
-#             for tr in tabelaItens.find_all("tr")[1:]:  # Ignorar header
-#                 tds = tr.find_all("td")
-#                 if len(tds) >= 2:
-#                     nomeItem = tds[0].text.strip()
-#                     itensAtuais.add(nomeItem)
+            # Pega os itens anteriores salvos no banco
+            cursor.execute("SELECT item_id, price FROM items_in_store WHERE store_id = %s", (id,))
+            itensAnteriores = set([(i[0], str(i[1])) for i in cursor.fetchall()])
 
-#             # Pega os itens anteriores salvos no banco
-#             cursor.execute("SELECT item_name FROM items_in_store WHERE store_id = %s", (store_id,))
-#             itensAnteriores = set([i[0] for i in cursor.fetchall()])
+            # Identifica os itens vendidos
+            vendidos = itensAnteriores - itensAtuais
+            print(f"itensAnteriores: {itensAnteriores}")
 
-#             vendidos = itensAnteriores - itensAtuais
+            # print("itensAtuais", itensAtuais)
+            # print("vendidos", vendidos)
 
-#             if vendidos:
-#                 houveVenda = True
-#                 vendasHtml += f"<h3>Loja: {store_name} ({player_name})</h3><ul>"
-#                 for item in vendidos:
-#                     vendasHtml += f"<li>{item}</li>"
-#                 vendasHtml += "</ul>"
+        #     if vendidos:
+        #         houveVenda = True
+        #         vendasHtml += f"<h3>Loja: {name} ({player_name})</h3><ul>"
+        #         for item in vendidos:
+        #             nomeItem, precoItem = item
+        #             vendasHtml += f"<li>Item: {nomeItem}, Preço: {precoItem}</li>"
+        #         vendasHtml += "</ul>"
 
-#                 # Atualizar os itens da loja (remover tudo e inserir os novos)
-#                 cursor.execute("DELETE FROM items_in_store WHERE store_id = %s", (store_id,))
-#                 for item in itensAtuais:
-#                     cursor.execute("INSERT INTO items_in_store (store_id, item_name) VALUES (%s, %s)", (store_id, item))
-#                 conexao.commit()
+        #         # Atualizar os itens da loja (remover tudo e inserir os novos)
+        #         cursor.execute("DELETE FROM items_in_store WHERE store_id = %s", (id,))
+        #         for item in itensAtuais:
+        #             nomeItem, precoItem = item
+        #             cursor.execute(
+        #                 "INSERT INTO items_in_store (store_id, name, price) VALUES (%s, %s, %s)",
+        #                 (id, nomeItem, precoItem),
+        #             )
+        #         conexao.commit()
 
-#         if houveVenda:
-#             subject = "History Reborn - Itens vendidos detectados"
-#             sendEmail(subject, vendasHtml)
+        # if houveVenda:
+        #     subject = "History Reborn - Itens vendidos detectados"
+        #     sendEmail(subject, vendasHtml)
 
-#     except Exception as e:
-#         print("Erro ao verificar vendas: ", e)
+    except Exception as e:
+        print("Erro ao verificar vendas: ", e)
 
 if __name__ == "__main__":
+    # checkStoreSales()
+
     for i in range(4):
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"Execução {i + 1} de 5 - Horário: {current_time}")
-        checkPrices()
-        # checkStoreSales()
+        # checkPrices()
         current_time_final = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"Terminou {i + 1} de 5 - Horário: {current_time_final}")
 
+    
         # time.sleep(60)
