@@ -4,6 +4,7 @@ import cloudscraper
 import mysql.connector
 import traceback
 import time
+import re 
 
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
@@ -13,26 +14,41 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+try:
+    MAX_RETRIES = int(os.getenv("MAX_EXECUTIONS", 1))
+    WAIT_MINUTES = int(os.getenv("EXECUTION_INTERVAL", 5))
+except ValueError:
+    print("Erro ao ler configurações de loop no .env. Usando padrão (1x).")
+    MAX_RETRIES = 1
+    WAIT_MINUTES = 5
+
 def sendEmail(subject, body):
-        senderEmail = os.getenv("SENDER_EMAIL")
-        recipientEmail = os.getenv("RECIPIENT_EMAIL")
-        senderPassword = os.getenv("GMAIL_TOKEN")
-        smtpServer = 'smtp.gmail.com'
-        smtpPort = 465
+    senderEmail = os.getenv("SENDER_EMAIL")
+    recipientEmail = os.getenv("RECIPIENT_EMAIL")
+    senderPassword = os.getenv("GMAIL_TOKEN")
+    smtpServer = 'smtp.gmail.com'
+    smtpPort = 465
 
-        message = MIMEMultipart()
-        message['Subject'] = subject
-        message['From'] = senderEmail
-        message['To'] = recipientEmail
-        body_part = MIMEText(body, 'html')
-        message.attach(body_part)
+    message = MIMEMultipart()
+    message['Subject'] = subject
+    message['From'] = senderEmail
+    message['To'] = recipientEmail
 
-        with smtplib.SMTP_SSL(smtpServer, smtpPort) as server:
-            server.login(senderEmail, senderPassword)
-            server.sendmail(senderEmail, recipientEmail, message.as_string())
+    message['X-Priority'] = '1'
+    message['X-MSMail-Priority'] = 'High'
+    message['Importance'] = 'High'
+
+    body_part = MIMEText(body, 'html')
+    message.attach(body_part)
+
+    with smtplib.SMTP_SSL(smtpServer, smtpPort) as server:
+        server.login(senderEmail, senderPassword)
+        server.sendmail(senderEmail, recipientEmail, message.as_string())
 
 def checkPrices():
     try:
+        baseUrl = os.getenv("BASE_URL")
+
         conexao = mysql.connector.connect(
             host=os.getenv("DB_HOST"),
             user=os.getenv("DB_USER"),
@@ -42,126 +58,144 @@ def checkPrices():
         )
 
         cursor = conexao.cursor(buffered=True)
-
         todayDate = datetime.today().strftime('%Y-%m-%d')
 
-        # Executar a consulta SQL
         cursor.execute("SELECT * FROM items")
-
-        # Recuperar todos os registros
         itens_bd = cursor.fetchall()
             
         htmlListItens = "<h2>Lista de itens monitorados</h2>"
-
         bodyHtml = ""
-
         sendMessage = False
         removeEmptyItems = []
 
+        page = cloudscraper.create_scraper()
+
         for item in itens_bd:
             itemId = str(item[2])
-            itemPrice = item[4]
+            
+            targetRefinement = item[3] 
+            targetRefinement = int(targetRefinement) if targetRefinement is not None else 0
+
+            itemPriceTarget = int(item[4]) 
+            targetCurrency = item[5] if len(item) > 5 and item[5] else "Zeny"
+
             removeEmptyItems.append(itemId)
 
-            page = cloudscraper.create_scraper()
-            scraper = page.get('https://historyreborn.net/?module=item&action=view&id='+itemId)
-                            
-            soup = BeautifulSoup(scraper.content,"html.parser")
-            tableStore = soup.find(id="nova-sale-table")
+            print(f"Verificando ID: {itemId} | Meta: {targetCurrency} {itemPriceTarget} | Refino Mínimo: +{targetRefinement}")
 
-            itemName = soup.findAll('h2')[1].text
+            url_item = f"{baseUrl}/?module=item&action=view&id={itemId}"
+            scraper = page.get(url_item)
+            
+            time.sleep(1) 
 
-            htmlListItens += f"<p><b>{itemName}</b> | Preço: {itemPrice}</p>"
+            soup = BeautifulSoup(scraper.content, "html.parser")
 
-            #   Início da criação da tabela de um item
-            bodyHtml += """
-                <h3 class='"""+itemId+"""'>
-                    <a href='https://historyreborn.net/?module=item&action=view&id="""+itemId+"""'>"""+ itemName + """</a>
+            try:
+                title_div = soup.find("div", {"class": "item-title-text"})
+                if title_div:
+                    for span in title_div.find_all("span"):
+                        span.decompose()
+                    itemName = title_div.get_text().strip()
+                else:
+                    itemName = f"Item {itemId}"
+            except:
+                itemName = f"Item {itemId}"
+
+            htmlListItens += f"<p><b>{itemName}</b> | Alvo: {itemPriceTarget} ({targetCurrency}) | Ref: +{targetRefinement}</p>"
+
+            shops_section = soup.find("div", {"class": "shops-section"})
+            
+            if not shops_section:
+                print(f" -> Sem lojas para {itemName}")
+                continue
+
+            tableStore = shops_section.find("table", {"class": "shops-table"})
+            if not tableStore: continue
+            
+            tbody = tableStore.find("tbody")
+            if not tbody: continue
+
+            bodyHtml += f"""
+                <h3 class='{itemId}'>
+                    <a href='{url_item}'>{itemName}</a> <small>(Busca: {targetCurrency} / Ref +{targetRefinement})</small>
                 </h3>
-
-                <table class='"""+itemId+"""'>
-                    <tr>
-                        <th>Loja</th>
-                        <th>Refinamento</th>
-                        <th>Cartas</th>
-                        <th>Valor</th>
-                        <th>Qtd</th>
-                    </tr>
+                <table class='{itemId}'>
+                    <tr><th>Loja</th><th>Ref</th><th>Cartas</th><th>Valor</th><th>Qtd</th><th>Tipo</th></tr>
                 """
 
-            for rows in tableStore.find_all('tr'):
-                rowItem = ""
-                if("CASH" in rows.find_all('td')[5].text):
+            rows = tbody.find_all('tr')
+            
+            for row in rows:
+                cols = row.find_all('td')
+                if len(cols) < 5: continue
 
-                    if(int(rows.find('font').text.replace(',', '')) <= int(itemPrice)):
-                        storeName = (rows.find_all('td')[0].text).strip()
-                        refinement = (rows.find_all('td')[1].text).strip()
-                        cards = (rows.find_all('td')[2].text).strip()
-                        price = (rows.find_all('td')[3].text).replace("c", "").replace(",", "").strip()
-                        quantity = (rows.find_all('td')[4].text).strip()
+                try:
+                    shop_div = cols[0].find("div", class_="shop-name")
+                    storeName = shop_div.get_text().strip() if shop_div else "Desconhecido"
 
-                        #   Adicionando valores em cada uma das células da tabela
-                        if(storeName):
-                            # Variável para indicar se a linha foi encontrada
-                            foundLine = False
-                            # Procura se já foi enviado um email hoje com o alerta do item
-                            formattedPrice = "{:.2f}".format(float(price))
-                            comando = f"SELECT * FROM alerts WHERE item_id = '{itemId}' AND store_name = '{storeName}' AND price = '{formattedPrice}' AND date = '{todayDate}';"
+                    raw_refinement = cols[1].get_text().strip()
+                    try:
+                        currentRefinement = int(raw_refinement.replace("+", ""))
+                    except:
+                        currentRefinement = 0
+
+                    cards = cols[2].get_text().strip()
+
+                    raw_price_text = cols[3].get_text().strip()
+                    price_clean = re.sub(r'[^\d]', '', raw_price_text)
+                    if not price_clean: continue
+                    currentPrice = int(price_clean)
+
+                    quantity = cols[4].get_text().strip()
+                    raw_currency_type = cols[5].get_text().strip()
+                    
+                    # --- FILTROS ---
+                    if targetCurrency.upper() != raw_currency_type.upper(): continue
+                    if currentRefinement < targetRefinement: continue
+
+                    if currentPrice <= itemPriceTarget:
+                        formattedPrice = "{:.2f}".format(float(currentPrice))
+                        
+                        comando = f"SELECT * FROM alerts WHERE item_id = '{itemId}' AND store_name = '{storeName}' AND price = '{formattedPrice}' AND date = '{todayDate}' AND currency = '{targetCurrency}';"
+                        cursor.execute(comando)
+
+                        if cursor.rowcount == 0:
+                            if itemId in removeEmptyItems: removeEmptyItems.remove(itemId)
+                            sendMessage = True
+                            print(f"!!! ALERTA ATINGIDO !!! Item: {itemName} | Ref: +{currentRefinement} | Preço: {raw_price_text}")
+
+                            storeNameEscaped = storeName.replace("'", "")
+                            comando = f"""
+                                INSERT INTO alerts (name, item_id, refinement, store_name, price, currency, date) 
+                                VALUES ('{itemName}', '{itemId}', '{currentRefinement}', '{storeNameEscaped}', '{formattedPrice}', '{targetCurrency}', '{todayDate}')
+                            """
                             cursor.execute(comando)
+                            conexao.commit()
 
-                            if(cursor.rowcount > 0):
-                                foundLine = True
-                            else:
-                                if itemId in removeEmptyItems: removeEmptyItems.remove(itemId)
-                            
+                            bodyHtml += f"""<tr>
+                                <td>{storeName}</td>
+                                <td>+{currentRefinement}</td>
+                                <td>{cards}</td>
+                                <td>{raw_price_text}</td>
+                                <td>{quantity}</td>
+                                <td>{raw_currency_type}</td>
+                            </tr>"""
+                
+                except Exception as e:
+                    print(f"Erro ao processar linha: {e}")
+                    continue
 
-                            if(foundLine == False):
-                                #   Início da criação da tabela de um item
-                                sendMessage = True
-
-                                # Adiciona no banco o item
-                                comando = f"INSERT INTO alerts (name, item_id, refinement, store_name, price, date) VALUES ('{itemName}', '{itemId}', '{refinement}', '{storeName}', '{formattedPrice}', '{todayDate}')"
-                                cursor.execute(comando)
-                                conexao.commit()
-
-                                rowItem += """   <tr>
-                                                    <td>""" + storeName + """</td>
-                                                    <td>""" + refinement + """</td>
-                                                    <td>""" + cards + """</td>
-                                                    <td>""" + price + """</td>
-                                                    <td>""" + quantity + """</td>
-                                                </tr>"""
-                            
-                            bodyHtml += rowItem
             bodyHtml += """</table>"""
 
-
-                
-        #   Contrói HTML que vai ser enviado pelo email
         html = """
             <html>
                 <head>
                     <style>
-                        table {
-                            font-family: arial, sans-serif;
-                            border-collapse: collapse;
-                            width: 100%;
-                        }
-
-                        td, th {
-                            border: 1px solid #dddddd;
-                            text-align: left;
-                            padding: 8px;
-                            width: 200px;
-                        }
-
-                        tr:nth-child(even) {
-                            background-color: #b4b4b4;
-                        }
-
-                        h2, h3 {
-                            color: #8590ff;
-                        }
+                        table {font-family: arial, sans-serif; border-collapse: collapse; width: 100%;}
+                        td, th {border: 1px solid #dddddd; text-align: left; padding: 8px;}
+                        tr:nth-child(even) {background-color: #f2f2f2;}
+                        h2, h3 {color: #8590ff;}
+                        small {color: #666; font-size: 0.8em;}
                     </style>
                 </head>
                 <body>
@@ -172,131 +206,48 @@ def checkPrices():
             </html>
         """
 
-        html = BeautifulSoup(html, 'html.parser')
-        # soup.find_all('table')
+        html_soup = BeautifulSoup(html, 'html.parser')
         
         for itemId in removeEmptyItems:
-            for tag in html.find_all("table", {"class": itemId}):
-                tag.decompose()
+            for tag in html_soup.find_all("table", {"class": itemId}): tag.decompose()
+            for tag in html_soup.find_all("h3", {"class": itemId}): tag.decompose()
 
-            for tag in html.find_all("h3", {"class": itemId}):
-                tag.decompose()
-
-        if(sendMessage == True):
-            subject = "History Reborn - Alerta atingido"
-            body = html
+        if sendMessage:
+            subject = "Hero Ragnarok - OPORTUNIDADE ENCONTRADA!"
+            body = str(html_soup)
             sendEmail(subject, body)
+            return "Email enviado com sucesso!"
 
         cursor.close()
         conexao.close()
-        return "Executado com sucesso!"
-    except Exception as e:
-        print(f"Ocorreu um erro: {e}")
-        # traceback.print_exc()
-
-        comando = f"SELECT * FROM error_emails WHERE date = '{todayDate}';"
-        cursor.execute(comando)
-
-        if(cursor.rowcount == 0):
-            subject = "ERRO - O sistema de alertas está com erro"
-            body =  """
-                        Verificar com o seguinte comando qual erro está acontecendo
-                        <br>
-                        heroku logs --app ws-history-reborn
-                    """
-            sendEmail(subject, body)
-
-            comando = f"INSERT INTO error_emails (date) VALUES ('{todayDate}')"
-            cursor.execute(comando)
-            conexao.commit()
-
-        return "Ocorreu um erro, verificar nos logs do Heroku!"
-
-def checkStoreSales():
-    try:
-        conexao = mysql.connector.connect(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DATABASE"),
-            port=int(os.getenv("DB_PORT", 3306))
-        )
-
-        cursor = conexao.cursor(buffered=True)
-
-        cursor.execute("SELECT id, name, player_name, url FROM stores WHERE is_active = 1")
-        lojas = cursor.fetchall()
-
-        if not lojas:
-            return
-
-        vendasHtml = "<h2>Itens vendidos detectados</h2>"
-        houveVenda = False
-
-        for loja in lojas:
-            id, name, player_name, url = loja
-            scraper = cloudscraper.create_scraper()
-            response = scraper.get(url)
-            soup = BeautifulSoup(response.content, "html.parser")
-
-            itensAtuais = set()
-            tabelaItens = soup.find("table")
-
-            if not tabelaItens:
-                continue
-
-            for tr in tabelaItens.find_all("tr")[1:]:
-                tds = tr.find_all("td")
-                if len(tds) >= 2:
-                    nomeItem = tds[0].text.strip()
-                    precoItem = tds[9].text.strip().replace("c", "").replace(",", "")
-                    itensAtuais.add((nomeItem, precoItem))
-
-            # Pega os itens anteriores salvos no banco
-            cursor.execute("SELECT item_id, price FROM items_in_store WHERE store_id = %s", (id,))
-            itensAnteriores = set([(i[0], str(i[1])) for i in cursor.fetchall()])
-
-            # Identifica os itens vendidos
-            vendidos = itensAnteriores - itensAtuais
-            print(f"itensAnteriores: {itensAnteriores}")
-
-            # print("itensAtuais", itensAtuais)
-            # print("vendidos", vendidos)
-
-        #     if vendidos:
-        #         houveVenda = True
-        #         vendasHtml += f"<h3>Loja: {name} ({player_name})</h3><ul>"
-        #         for item in vendidos:
-        #             nomeItem, precoItem = item
-        #             vendasHtml += f"<li>Item: {nomeItem}, Preço: {precoItem}</li>"
-        #         vendasHtml += "</ul>"
-
-        #         # Atualizar os itens da loja (remover tudo e inserir os novos)
-        #         cursor.execute("DELETE FROM items_in_store WHERE store_id = %s", (id,))
-        #         for item in itensAtuais:
-        #             nomeItem, precoItem = item
-        #             cursor.execute(
-        #                 "INSERT INTO items_in_store (store_id, name, price) VALUES (%s, %s, %s)",
-        #                 (id, nomeItem, precoItem),
-        #             )
-        #         conexao.commit()
-
-        # if houveVenda:
-        #     subject = "History Reborn - Itens vendidos detectados"
-        #     sendEmail(subject, vendasHtml)
+        return "Executado com sucesso (sem novos alertas)."
 
     except Exception as e:
-        print("Erro ao verificar vendas: ", e)
+        print(f"Ocorreu um erro fatal: {e}")
+        traceback.print_exc()
+        try:
+            if 'conexao' in locals() and conexao.is_connected():
+                cursor.close()
+                conexao.close()
+        except:
+            pass
+        return "Ocorreu um erro, verificar logs!"
 
 if __name__ == "__main__":
-    # checkStoreSales()
-
-    for i in range(4):
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(f"Execução {i + 1} de 5 - Horário: {current_time}")
-        checkPrices()
-        current_time_final = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(f"Terminou {i + 1} de 5 - Horário: {current_time_final}")
-
+    print(f"Configuração iniciada: {MAX_RETRIES} execuções.")
     
-        # time.sleep(60)
+    for i in range(MAX_RETRIES):
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"🚀 Execução {i + 1} de {MAX_RETRIES} - Início: {current_time}")
+        
+        resultado = checkPrices()
+        print(f"📝 Resultado: {resultado}")
+        
+        if i < (MAX_RETRIES - 1):
+            next_run_seconds = WAIT_MINUTES * 60
+            print(f"💤 Aguardando {WAIT_MINUTES} minutos para a próxima verificação...")
+            print("-" * 50)
+            time.sleep(next_run_seconds)
+        else:
+            print("-" * 50)
+            print("🏁 Todas as verificações foram concluídas.")
