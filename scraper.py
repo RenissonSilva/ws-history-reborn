@@ -25,6 +25,11 @@ def sendEmail(subject, body):
     message['Subject'] = subject
     message['From'] = senderEmail
     message['To'] = recipientEmail
+
+    message['X-Priority'] = '1'
+    message['X-MSMail-Priority'] = 'High'
+    message['Importance'] = 'High'
+
     body_part = MIMEText(body, 'html')
     message.attach(body_part)
 
