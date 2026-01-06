@@ -33,6 +33,8 @@ def sendEmail(subject, body):
 
 def checkPrices():
     try:
+        baseUrl = os.getenv("BASE_URL")
+
         conexao = mysql.connector.connect(
             host=os.getenv("DB_HOST"),
             user=os.getenv("DB_USER"),
@@ -64,8 +66,8 @@ def checkPrices():
             removeEmptyItems.append(itemId)
 
             page = cloudscraper.create_scraper()
-            scraper = page.get('https://historyreborn.net/?module=item&action=view&id='+itemId)
-                            
+            scraper = page.get(f"{baseUrl}/?module=item&action=view&id={itemId}")
+
             soup = BeautifulSoup(scraper.content,"html.parser")
             tableStore = soup.find(id="nova-sale-table")
 
@@ -74,12 +76,12 @@ def checkPrices():
             htmlListItens += f"<p><b>{itemName}</b> | Preço: {itemPrice}</p>"
 
             #   Início da criação da tabela de um item
-            bodyHtml += """
-                <h3 class='"""+itemId+"""'>
-                    <a href='https://historyreborn.net/?module=item&action=view&id="""+itemId+"""'>"""+ itemName + """</a>
+            bodyHtml += f"""
+                <h3 class='{itemId}'>
+                    <a href='{baseUrl}/?module=item&action=view&id={itemId}'>{itemName}</a>
                 </h3>
 
-                <table class='"""+itemId+"""'>
+                <table class='{itemId}'>
                     <tr>
                         <th>Loja</th>
                         <th>Refinamento</th>
@@ -183,7 +185,7 @@ def checkPrices():
                 tag.decompose()
 
         if(sendMessage == True):
-            subject = "History Reborn - Alerta atingido"
+            subject = "Hero Ragnarok - Alerta atingido"
             body = html
             sendEmail(subject, body)
 
