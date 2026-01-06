@@ -4,7 +4,7 @@ import cloudscraper
 import mysql.connector
 import traceback
 import time
-import re # Importado para limpar o preço com regex
+import re 
 
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
@@ -47,7 +47,7 @@ def checkPrices():
         cursor = conexao.cursor(buffered=True)
         todayDate = datetime.today().strftime('%Y-%m-%d')
 
-        # Executar a consulta SQL
+        # Busca todos os itens para monitorar
         cursor.execute("SELECT * FROM items")
         itens_bd = cursor.fetchall()
             
@@ -57,11 +57,26 @@ def checkPrices():
         removeEmptyItems = []
 
         for item in itens_bd:
+            # Mapeamento das colunas baseado no seu Prisma Schema:
+            # 0: id, 1: name, 2: item_id, 3: refinement, 4: price, 5: currency
             itemId = str(item[2])
-            itemPriceTarget = int(item[4]) # Preço alvo do banco
+            
+            # Tratamento do Refinamento Alvo (Do Banco)
+            targetRefinement = item[3] 
+            if targetRefinement is None: 
+                targetRefinement = 0
+            else:
+                targetRefinement = int(targetRefinement)
+
+            # Tratamento do Preço Alvo
+            itemPriceTarget = int(item[4]) 
+            
+            # Tratamento da Moeda Alvo (Do Banco) - Default Zeny se vier None
+            targetCurrency = item[5] if len(item) > 5 and item[5] else "Zeny"
+
             removeEmptyItems.append(itemId)
 
-            print(f"Verificando Item ID: {itemId}...")
+            print(f"Verificando ID: {itemId} | Meta: {targetCurrency} {itemPriceTarget} | Refino Mínimo: +{targetRefinement}")
 
             page = cloudscraper.create_scraper()
             url_item = f"{baseUrl}/?module=item&action=view&id={itemId}"
@@ -69,28 +84,25 @@ def checkPrices():
 
             soup = BeautifulSoup(scraper.content, "html.parser")
 
-            # --- 1. Extração do Nome do Item (Ajustado para o novo HTML) ---
+            # --- 1. Extração do Nome do Item ---
             try:
                 title_div = soup.find("div", {"class": "item-title-text"})
                 if title_div:
-                    # Remove o span do ID para pegar só o nome limpo
                     for span in title_div.find_all("span"):
                         span.decompose()
                     itemName = title_div.get_text().strip()
                 else:
-                    # Fallback caso mude algo
                     itemName = f"Item {itemId}"
             except:
                 itemName = f"Item {itemId}"
 
-            htmlListItens += f"<p><b>{itemName}</b> | Preço Alvo: {itemPriceTarget}</p>"
+            htmlListItens += f"<p><b>{itemName}</b> | Alvo: {itemPriceTarget} ({targetCurrency}) | Ref: +{targetRefinement}</p>"
 
-            # --- 2. Localização da Tabela de Lojas ---
+            # --- 2. Localização da Tabela ---
             shops_section = soup.find("div", {"class": "shops-section"})
             
-            # Se não tem seção de lojas ou tabela, pula
             if not shops_section:
-                print(f"Sem seção de lojas para {itemName}")
+                print(f" -> Sem lojas para {itemName}")
                 continue
 
             tableStore = shops_section.find("table", {"class": "shops-table"})
@@ -101,10 +113,10 @@ def checkPrices():
             if not tbody:
                 continue
 
-            # Início do HTML do email para este item
+            # Cabeçalho da tabela do email
             bodyHtml += f"""
                 <h3 class='{itemId}'>
-                    <a href='{url_item}'>{itemName}</a>
+                    <a href='{url_item}'>{itemName}</a> <small>(Busca: {targetCurrency} / Ref +{targetRefinement})</small>
                 </h3>
 
                 <table class='{itemId}'>
@@ -118,57 +130,69 @@ def checkPrices():
                     </tr>
                 """
 
-            # --- 3. Iteração das Linhas (Ajustado para as colunas do HTML) ---
-            # Estrutura do HTML fornecido:
-            # 0: Loja (div.shop-name) | 1: Refino | 2: Cartas | 3: Preço | 4: Qtd | 5: Badge (RMT/ROPS/Zeny)
-            
+            # --- 3. Iteração e Filtragem ---
             rows = tbody.find_all('tr')
             
             for row in rows:
                 cols = row.find_all('td')
                 
-                # Proteção: precisa ter as colunas esperadas
                 if len(cols) < 5: 
                     continue
 
                 try:
-                    # -- Extração de Dados --
+                    # -- Extração de Dados do HTML --
                     
                     # Nome da Loja
                     shop_div = cols[0].find("div", class_="shop-name")
                     storeName = shop_div.get_text().strip() if shop_div else "Desconhecido"
 
-                    # Refinamento e Cartas
-                    refinement = cols[1].get_text().strip()
+                    # Refinamento (HTML ex: "+7" ou "0")
+                    raw_refinement = cols[1].get_text().strip()
+                    try:
+                        currentRefinement = int(raw_refinement.replace("+", ""))
+                    except:
+                        currentRefinement = 0
+
+                    # Cartas
                     cards = cols[2].get_text().strip()
 
-                    # Preço (Coluna 3) - Limpeza pesada
+                    # Preço e Limpeza
                     raw_price_text = cols[3].get_text().strip()
-                    # Remove 'c', 'z', 'RMT', virgulas, pontos e espaços
-                    # Ex: "85,000c" -> "85000", "50 RMT" -> "50"
                     price_clean = re.sub(r'[^\d]', '', raw_price_text)
-                    
-                    if not price_clean: continue # Se não achou numero, pula
-                    
+                    if not price_clean: continue
                     currentPrice = int(price_clean)
 
                     # Quantidade
                     quantity = cols[4].get_text().strip()
 
-                    # Tipo de Moeda (Coluna 5)
-                    currency_type = cols[5].get_text().strip() # Ex: RMT, ROPS, ZENY
-
-                    # -- Lógica de Alerta --
-                    # Aqui você pode filtrar se quer verificar o preço independente da moeda (RMT vs Zeny)
-                    # O código abaixo compara o número cru. Se itemPriceTarget for em Zeny e o cara vender em RMT (valor baixo), vai alertar.
+                    # Moeda (HTML ex: "ROPS", "RMT", "ZENY")
+                    raw_currency_type = cols[5].get_text().strip()
+                    print('raw_currency_type', raw_currency_type)
                     
+                    # --- FILTROS ---
+
+                    # 1. Filtro de Moeda
+                    # Compara ignorando maiusculas/minusculas (ex: "Zeny" == "ZENY")
+                    if targetCurrency.upper() != raw_currency_type.upper():
+                        # print(f"Ignorado: Moeda errada ({raw_currency_type} vs {targetCurrency})")
+                        continue
+
+                    # 2. Filtro de Refinamento
+                    # Verifica se o refino da loja é MENOR que o alvo. Se for, ignora.
+                    if currentRefinement < targetRefinement:
+                        # print(f"Ignorado: Refino baixo (+{currentRefinement} vs +{targetRefinement})")
+                        continue
+
+                    # 3. Filtro de Preço
+                    # Verifica se está barato o suficiente
                     if currentPrice <= itemPriceTarget:
                         rowItem = ""
                         foundLine = False
                         formattedPrice = "{:.2f}".format(float(currentPrice))
                         
-                        # Verifica se já alertou hoje
-                        comando = f"SELECT * FROM alerts WHERE item_id = '{itemId}' AND store_name = '{storeName}' AND price = '{formattedPrice}' AND date = '{todayDate}';"
+                        # Verifica se já alertou hoje (compara também a Moeda no banco se possível, ou assume pela loja/preço)
+                        # Nota: Adicionei currency na verificação para garantir
+                        comando = f"SELECT * FROM alerts WHERE item_id = '{itemId}' AND store_name = '{storeName}' AND price = '{formattedPrice}' AND date = '{todayDate}' AND currency = '{targetCurrency}';"
                         cursor.execute(comando)
 
                         if cursor.rowcount > 0:
@@ -178,22 +202,26 @@ def checkPrices():
                         
                         if not foundLine:
                             sendMessage = True
-                            print(f"ALERTA: {itemName} | Loja: {storeName} | Valor: {raw_price_text}")
+                            print(f"!!! ALERTA ATINGIDO !!! Item: {itemName} | Ref: +{currentRefinement} | Preço: {raw_price_text}")
 
-                            # Insere no banco
-                            # Escape simples para o nome da loja evitar erro de SQL com aspas
+                            # Insere no banco (AGORA COM CURRENCY)
                             storeNameEscaped = storeName.replace("'", "")
-                            comando = f"INSERT INTO alerts (name, item_id, refinement, store_name, price, date) VALUES ('{itemName}', '{itemId}', '{refinement}', '{storeNameEscaped}', '{formattedPrice}', '{todayDate}')"
+                            
+                            # Query atualizada para incluir currency
+                            comando = f"""
+                                INSERT INTO alerts (name, item_id, refinement, store_name, price, currency, date) 
+                                VALUES ('{itemName}', '{itemId}', '{currentRefinement}', '{storeNameEscaped}', '{formattedPrice}', '{targetCurrency}', '{todayDate}')
+                            """
                             cursor.execute(comando)
                             conexao.commit()
 
                             rowItem += f"""   <tr>
                                                 <td>{storeName}</td>
-                                                <td>{refinement}</td>
+                                                <td>+{currentRefinement}</td>
                                                 <td>{cards}</td>
                                                 <td>{raw_price_text}</td>
                                                 <td>{quantity}</td>
-                                                <td>{currency_type}</td>
+                                                <td>{raw_currency_type}</td>
                                             </tr>"""
                             
                             bodyHtml += rowItem
@@ -228,6 +256,10 @@ def checkPrices():
                         h2, h3 {
                             color: #8590ff;
                         }
+                        small {
+                            color: #666;
+                            font-size: 0.8em;
+                        }
                     </style>
                 </head>
                 <body>
@@ -240,7 +272,7 @@ def checkPrices():
 
         html_soup = BeautifulSoup(html, 'html.parser')
         
-        # Limpa tabelas vazias do HTML final
+        # Limpa tabelas vazias
         for itemId in removeEmptyItems:
             for tag in html_soup.find_all("table", {"class": itemId}):
                 tag.decompose()
@@ -249,7 +281,7 @@ def checkPrices():
                 tag.decompose()
 
         if sendMessage:
-            subject = "Hero Ragnarok - Alerta de Preço!"
+            subject = "Hero Ragnarok - OPORTUNIDADE ENCONTRADA!"
             body = str(html_soup)
             sendEmail(subject, body)
             return "Email enviado com sucesso!"
@@ -262,10 +294,10 @@ def checkPrices():
         print(f"Ocorreu um erro fatal: {e}")
         traceback.print_exc()
 
-        # Log de erro no email (opcional, mantendo sua lógica)
         try:
             if 'conexao' in locals() and conexao.is_connected():
                 cursor = conexao.cursor(buffered=True)
+                # Verifica tabela de erros (log simples)
                 comando = f"SELECT * FROM error_emails WHERE date = '{todayDate}';"
                 cursor.execute(comando)
 
